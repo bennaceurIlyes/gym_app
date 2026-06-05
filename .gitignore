@@ -3,3 +3,17 @@ __pycache__/
 *.pyc
 .idea/
 .vscode/
+
+# Expo / React Native (mobile_app)
+mobile_app/node_modules/
+mobile_app/.expo/
+mobile_app/dist/
+mobile_app/web-build/
+mobile_app/ios/
+mobile_app/android/
+mobile_app/.metro-health-check*
+mobile_app/npm-debug.*
+mobile_app/yarn-debug.*
+mobile_app/yarn-error.*
+mobile_app/.env*.local
+mobile_app/*.tsbuildinfo
