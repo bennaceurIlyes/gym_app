@@ -13,7 +13,7 @@ import { Feather } from '@expo/vector-icons';
 
 export default function ExerciseDetailScreen({ exercise, onBack }) {
   return (
-    <LinearGradient colors={['#0f172a', '#1e293b']} style={styles.container}>
+    <LinearGradient colors={['#050811', '#0f172a']} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <StatusBar style="light" />
         
@@ -24,17 +24,17 @@ export default function ExerciseDetailScreen({ exercise, onBack }) {
             onPress={onBack}
             activeOpacity={0.7}
           >
-            <Feather name="arrow-left" size={24} color="#ffffff" />
+            <Feather name="chevron-left" size={24} color="#ffffff" />
           </TouchableOpacity>
           <Text style={styles.trackerTitle}>{exercise?.title || 'Details'}</Text>
-          <View style={{ width: 24 }} />
+          <View style={{ width: 38 }} />
         </View>
 
         <ScrollView contentContainerStyle={styles.detailScroll}>
-          {/* Visual Header / Banner */}
+          {/* Visual Header / Banner (Glassmorphic) */}
           <View style={styles.detailCard}>
             <View style={styles.detailHeaderIcon}>
-              <Feather name={exercise?.icon || 'activity'} size={40} color="#3b82f6" />
+              <Feather name={exercise?.icon || 'activity'} size={32} color="#00f2fe" />
             </View>
             <Text style={styles.detailTitle}>{exercise?.title}</Text>
             <Text style={styles.detailSubtitle}>{exercise?.subtitle}</Text>
@@ -74,9 +74,9 @@ export default function ExerciseDetailScreen({ exercise, onBack }) {
             </View>
           </View>
 
-          {/* Notice / Warning */}
+          {/* Notice / Warning Box */}
           <View style={styles.noticeBox}>
-            <Feather name="info" size={20} color="#f59e0b" style={{ marginRight: 10 }} />
+            <Feather name="info" size={18} color="#FF9F43" style={{ marginRight: 10 }} />
             <Text style={styles.noticeText}>
               The AI Pose Tracking module for this exercise is currently being adapted. Try out the Push-ups tracker to experience live vision analysis.
             </Text>
@@ -98,18 +98,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderColor: '#1e293b',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1.2,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
   },
   backButton: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 10,
-    backgroundColor: '#1e293b',
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   trackerTitle: {
     fontSize: 18,
@@ -117,28 +119,28 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   detailScroll: {
-    padding: 20,
+    padding: 16,
     paddingBottom: 40,
   },
   detailCard: {
-    backgroundColor: '#1e293b',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#334155',
-    padding: 24,
+    backgroundColor: 'rgba(30, 41, 59, 0.45)',
+    borderRadius: 24,
+    borderWidth: 1.2,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    padding: 20,
     alignItems: 'center',
     marginBottom: 20,
   },
   detailHeaderIcon: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: '#0f172a',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(0, 242, 254, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 15,
-    borderWidth: 1.5,
-    borderColor: '#3b82f6',
+    borderWidth: 1.2,
+    borderColor: 'rgba(0, 242, 254, 0.25)',
   },
   detailTitle: {
     fontSize: 22,
@@ -146,9 +148,9 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   detailSubtitle: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#38bdf8',
-    fontWeight: '600',
+    fontWeight: '700',
     marginTop: 4,
     marginBottom: 16,
   },
@@ -160,36 +162,39 @@ const styles = StyleSheet.create({
   },
   detailBadge: {
     flexDirection: 'row',
-    backgroundColor: '#0f172a',
-    borderRadius: 8,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 6,
     alignItems: 'center',
     gap: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.04)',
   },
   detailBadgeLabel: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#64748b',
-    fontWeight: '600',
+    fontWeight: '700',
   },
   detailBadgeVal: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#ffffff',
-    fontWeight: '700',
+    fontWeight: '800',
   },
   detailSectionTitle: {
     fontSize: 16,
     fontWeight: '800',
     color: '#ffffff',
-    marginBottom: 10,
+    marginBottom: 12,
     marginTop: 10,
+    letterSpacing: 0.3,
   },
   textContainer: {
-    backgroundColor: '#1e293b',
-    borderRadius: 16,
+    backgroundColor: 'rgba(30, 41, 59, 0.4)',
+    borderRadius: 20,
     padding: 16,
-    borderWidth: 1,
-    borderColor: '#334155',
+    borderWidth: 1.2,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
     marginBottom: 20,
   },
   detailText: {
@@ -198,13 +203,13 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   instructionsContainer: {
-    backgroundColor: '#1e293b',
-    borderRadius: 16,
+    backgroundColor: 'rgba(30, 41, 59, 0.4)',
+    borderRadius: 20,
     padding: 16,
-    borderWidth: 1,
-    borderColor: '#334155',
+    borderWidth: 1.2,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
     marginBottom: 20,
-    gap: 15,
+    gap: 14,
   },
   instructionStep: {
     flexDirection: 'row',
@@ -212,15 +217,15 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   stepNum: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#3b82f6',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#00f2fe',
     color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '800',
+    fontSize: 11,
+    fontWeight: '850',
     textAlign: 'center',
-    lineHeight: 24,
+    lineHeight: 22,
   },
   stepText: {
     flex: 1,
@@ -230,17 +235,18 @@ const styles = StyleSheet.create({
   },
   noticeBox: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(245, 158, 11, 0.08)',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.2)',
-    padding: 16,
+    backgroundColor: 'rgba(255, 159, 67, 0.08)',
+    borderRadius: 20,
+    borderWidth: 1.2,
+    borderColor: 'rgba(255, 159, 67, 0.25)',
+    padding: 15,
     alignItems: 'center',
   },
   noticeText: {
     flex: 1,
-    color: '#f59e0b',
+    color: '#FF9F43',
     fontSize: 12,
     lineHeight: 18,
+    fontWeight: '600',
   }
 });

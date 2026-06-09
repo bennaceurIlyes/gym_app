@@ -125,10 +125,23 @@ export const getWebViewHtml = (serverIp) => {
 
         pose.onResults(onResults);
 
+        let feedbackColor = '#00D2FF';
+        let elbowAngle = null;
+        let backAngle = null;
+
+        function hexToRgba(hex, alpha) {
+          hex = hex.replace('#', '');
+          if (hex.length === 3) {
+            hex = hex.split('').map(c => c + c).join('');
+          }
+          let r = parseInt(hex.substring(0, 2), 16) || 0;
+          let g = parseInt(hex.substring(2, 4), 16) || 0;
+          let b = parseInt(hex.substring(4, 6), 16) || 0;
+          return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        }
+
         // Draw connections helper
-        function drawConnectors(ctx, landmarks, connections, color, lineWidth) {
-          ctx.strokeStyle = color;
-          ctx.lineWidth = lineWidth;
+        function drawConnectors(ctx, landmarks, connections, defaultColor, lineWidth) {
           connections.forEach(([i, j]) => {
             const first = landmarks[i];
             const second = landmarks[j];
@@ -136,21 +149,109 @@ export const getWebViewHtml = (serverIp) => {
               ctx.beginPath();
               ctx.moveTo(first.x * canvas.width, first.y * canvas.height);
               ctx.lineTo(second.x * canvas.width, second.y * canvas.height);
+              
+              // Color code specific bones
+              const isSpine = (i === 11 && j === 23) || (i === 23 && j === 25) || (i === 25 && j === 27) ||
+                              (i === 12 && j === 24) || (i === 24 && j === 26) || (i === 26 && j === 28);
+              const isArm = (i === 11 && j === 13) || (i === 13 && j === 15) ||
+                            (i === 12 && j === 14) || (i === 14 && j === 16);
+              
+              if (isSpine) {
+                ctx.strokeStyle = feedbackColor; // turns red/orange/green dynamically
+                ctx.lineWidth = 4;
+              } else if (isArm) {
+                ctx.strokeStyle = '#00D2FF'; // electric cyan arms
+                ctx.lineWidth = 4;
+              } else {
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)'; // muted gray/white for secondary bones
+                ctx.lineWidth = 2;
+              }
+              
               ctx.stroke();
             }
           });
         }
 
-        // Draw landmarks helper
-        function drawLandmarks(ctx, landmarks, color, radius) {
-          ctx.fillStyle = color;
-          landmarks.forEach((lm) => {
+        // Draw glowing joint landmarks helper
+        const ACTIVE_JOINTS = [11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28]; // shoulders, elbows, wrists, hips, knees, ankles
+
+        function drawLandmarks(ctx, landmarks, defaultColor, radius) {
+          landmarks.forEach((lm, idx) => {
             if (lm.visibility > 0.5) {
-              ctx.beginPath();
-              ctx.arc(lm.x * canvas.width, lm.y * canvas.height, radius, 0, 2 * Math.PI);
-              ctx.fill();
+              const isActive = ACTIVE_JOINTS.includes(idx);
+              const x = lm.x * canvas.width;
+              const y = lm.y * canvas.height;
+              
+              if (isActive) {
+                // Glow Ring 2
+                ctx.beginPath();
+                ctx.arc(x, y, 15, 0, 2 * Math.PI);
+                ctx.fillStyle = hexToRgba(feedbackColor, 0.15);
+                ctx.fill();
+
+                // Glow Ring 1
+                ctx.beginPath();
+                ctx.arc(x, y, 9, 0, 2 * Math.PI);
+                ctx.fillStyle = hexToRgba(feedbackColor, 0.4);
+                ctx.fill();
+
+                // Solid Core
+                ctx.beginPath();
+                ctx.arc(x, y, 4, 0, 2 * Math.PI);
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fill();
+              } else {
+                // Secondary joints (small translucent dot)
+                ctx.beginPath();
+                ctx.arc(x, y, 3, 0, 2 * Math.PI);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.fill();
+              }
             }
           });
+        }
+
+        // Draw dynamic joint flex angle gauges around elbows
+        function drawElbowGauge(ctx, a, b, c) {
+          if (!a || !b || !c || a.visibility < 0.5 || b.visibility < 0.5 || c.visibility < 0.5) return;
+          
+          let dx1 = a.x - b.x;
+          let dy1 = a.y - b.y;
+          let dx2 = c.x - b.x;
+          let dy2 = c.y - b.y;
+          
+          let ang1 = Math.atan2(dy1, dx1);
+          let ang2 = Math.atan2(dy2, dx2);
+          
+          let angle = Math.abs((ang2 - ang1) * 180 / Math.PI);
+          if (angle > 180) angle = 360 - angle;
+          
+          const bx = b.x * canvas.width;
+          const by = b.y * canvas.height;
+          
+          // Draw circular arc around elbow
+          ctx.beginPath();
+          ctx.arc(bx, by, 26, ang1, ang2);
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+          ctx.lineWidth = 2.5;
+          ctx.stroke();
+          
+          // Draw neon glowing arc overlay
+          ctx.beginPath();
+          ctx.arc(bx, by, 26, ang1, ang2);
+          ctx.strokeStyle = hexToRgba(feedbackColor, 0.25);
+          ctx.lineWidth = 7;
+          ctx.stroke();
+
+          // Render angle text cell next to elbow
+          ctx.fillStyle = '#FFFFFF';
+          ctx.font = 'bold 11px sans-serif';
+          ctx.shadowColor = 'rgba(0,0,0,0.85)';
+          ctx.shadowBlur = 4;
+          let textX = bx + (a.x < b.x ? 32 : -50);
+          let textY = by - 8;
+          ctx.fillText(Math.round(angle) + '°', textX, textY);
+          ctx.shadowBlur = 0;
         }
 
         const POSE_CONNECTIONS = [
@@ -167,12 +268,22 @@ export const getWebViewHtml = (serverIp) => {
           ctx.clearRect(0, 0, canvas.width, canvas.height);
 
           if (results.poseLandmarks) {
-            // Draw skeleton lines
+            // Draw custom styled connectors and glowing nodes
             drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, '#007FFF', 3);
-            // Draw joint dots
             drawLandmarks(ctx, results.poseLandmarks, '#FFFFFF', 5);
 
-            // Send landmarks to python server for state machine
+            // Draw individual real-time elbow gauges
+            const l_shoulder = results.poseLandmarks[11];
+            const l_elbow = results.poseLandmarks[13];
+            const l_wrist = results.poseLandmarks[15];
+            drawElbowGauge(ctx, l_shoulder, l_elbow, l_wrist);
+
+            const r_shoulder = results.poseLandmarks[12];
+            const r_elbow = results.poseLandmarks[14];
+            const r_wrist = results.poseLandmarks[16];
+            drawElbowGauge(ctx, r_shoulder, r_elbow, r_wrist);
+
+            // Send landmarks to python server for state machine processing
             sendLandmarksToPython(results.poseLandmarks, results.poseWorldLandmarks);
           }
         }
@@ -192,6 +303,13 @@ export const getWebViewHtml = (serverIp) => {
             const data = await response.json();
             // Send back to React Native
             window.ReactNativeWebView.postMessage(JSON.stringify(data));
+            
+            // Save state for dynamic local drawings
+            if (data) {
+              feedbackColor = data.color || '#00D2FF';
+              elbowAngle = data.elbow_angle;
+              backAngle = data.back_angle;
+            }
           } catch (e) {
             console.error('Error sending landmarks:', e);
           }

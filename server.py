@@ -384,53 +384,56 @@ def pose_estimation_loop():
                         feedback_timer = current_time
 
             # Draw lines and overlays
+            # Determine dynamic form color
+            with thread_lock:
+                form_color = GREEN if feedback_color_hex == "#7FFF00" else (RED if feedback_color_hex == "#FF3232" else (ORANGE if feedback_color_hex == "#f59e0b" else YELLOW))
+
+            def draw_glow_node(img, pt, col):
+                cv2.circle(img, pt, 11, col, 2)
+                cv2.circle(img, pt, 4, (255, 255, 255), -1)
+
+            # Left side core lines & nodes
             if l_shoulder_lm.visibility > 0.5 and l_hip_lm.visibility > 0.5:
-                l_back_ok = (l_back_angle is None or l_back_angle > 145)
-                l_plank_ok = (l_plank_angle is None or l_plank_angle > 145)
-                l_form_ok = l_back_ok and l_plank_ok
-                back_color = GREEN if (l_form_ok and is_horizontal) else RED
-                
-                cv2.line(frame, l_shoulder, l_hip, back_color, 4)
-                cv2.circle(frame, l_shoulder, 8, WHITE, -1)
-                cv2.circle(frame, l_hip, 8, WHITE, -1)
+                cv2.line(frame, l_shoulder, l_hip, form_color, 4)
+                draw_glow_node(frame, l_shoulder, form_color)
+                draw_glow_node(frame, l_hip, form_color)
                 
                 if l_knee_lm.visibility > 0.5:
-                    cv2.line(frame, l_hip, l_knee, back_color, 4)
-                    cv2.circle(frame, l_knee, 8, WHITE, -1)
+                    cv2.line(frame, l_hip, l_knee, form_color, 4)
+                    draw_glow_node(frame, l_knee, form_color)
                     if l_ankle_lm.visibility > 0.5:
-                        cv2.line(frame, l_knee, l_ankle, back_color, 4)
-                        cv2.circle(frame, l_ankle, 8, WHITE, -1)
+                        cv2.line(frame, l_knee, l_ankle, form_color, 4)
+                        draw_glow_node(frame, l_ankle, form_color)
 
+            # Right side core lines & nodes
             if r_shoulder_lm.visibility > 0.5 and r_hip_lm.visibility > 0.5:
-                r_back_ok = (r_back_angle is None or r_back_angle > 145)
-                r_plank_ok = (r_plank_angle is None or r_plank_angle > 145)
-                r_form_ok = r_back_ok and r_plank_ok
-                back_color = GREEN if (r_form_ok and is_horizontal) else RED
-                
-                cv2.line(frame, r_shoulder, r_hip, back_color, 4)
-                cv2.circle(frame, r_shoulder, 8, WHITE, -1)
-                cv2.circle(frame, r_hip, 8, WHITE, -1)
+                cv2.line(frame, r_shoulder, r_hip, form_color, 4)
+                draw_glow_node(frame, r_shoulder, form_color)
+                draw_glow_node(frame, r_hip, form_color)
                 
                 if r_knee_lm.visibility > 0.5:
-                    cv2.line(frame, r_hip, r_knee, back_color, 4)
-                    cv2.circle(frame, r_knee, 8, WHITE, -1)
+                    cv2.line(frame, r_hip, r_knee, form_color, 4)
+                    draw_glow_node(frame, r_knee, form_color)
                     if r_ankle_lm.visibility > 0.5:
-                        cv2.line(frame, r_knee, r_ankle, back_color, 4)
-                        cv2.circle(frame, r_ankle, 8, WHITE, -1)
+                        cv2.line(frame, r_knee, r_ankle, form_color, 4)
+                        draw_glow_node(frame, r_ankle, form_color)
 
+            # Left arm skeleton & nodes
             if l_arm_visible:
                 cv2.line(frame, l_shoulder, l_elbow, BLUE, 4)
                 cv2.line(frame, l_elbow, l_wrist, BLUE, 4)
-                cv2.circle(frame, l_elbow, 8, WHITE, -1)
-                cv2.circle(frame, l_wrist, 8, WHITE, -1)
+                draw_glow_node(frame, l_elbow, BLUE)
+                draw_glow_node(frame, l_wrist, BLUE)
+                # Text with background shadow for readability
                 cv2.putText(frame, f"L: {int(elbow_angle)}", (l_elbow[0] - 50, l_elbow[1] - 15),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, YELLOW, 2)
 
+            # Right arm skeleton & nodes
             if r_arm_visible:
                 cv2.line(frame, r_shoulder, r_elbow, BLUE, 4)
                 cv2.line(frame, r_elbow, r_wrist, BLUE, 4)
-                cv2.circle(frame, r_elbow, 8, WHITE, -1)
-                cv2.circle(frame, r_wrist, 8, WHITE, -1)
+                draw_glow_node(frame, r_elbow, BLUE)
+                draw_glow_node(frame, r_wrist, BLUE)
                 cv2.putText(frame, f"R: {int(elbow_angle)}", (r_elbow[0] + 10, r_elbow[1] - 15),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, YELLOW, 2)
 

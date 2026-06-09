@@ -9,11 +9,14 @@ import {
   Platform,
   ActivityIndicator,
   SafeAreaView,
-  Alert
+  Alert,
+  Dimensions
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
+
+const { width } = Dimensions.get('window');
 
 export default function LoginScreen({ onLoginSuccess, onBypassLogin }) {
   const [email, setEmail] = useState('');
@@ -43,7 +46,7 @@ export default function LoginScreen({ onLoginSuccess, onBypassLogin }) {
   };
 
   return (
-    <LinearGradient colors={['#0f172a', '#1e293b', '#0f172a']} style={styles.container}>
+    <LinearGradient colors={['#050811', '#0f172a', '#050811']} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <StatusBar style="light" />
         <KeyboardAvoidingView
@@ -53,21 +56,25 @@ export default function LoginScreen({ onLoginSuccess, onBypassLogin }) {
           {/* Header Section */}
           <View style={styles.header}>
             <View style={styles.logoWrapper}>
-              <View style={styles.logoOutline}>
-                <LinearGradient
-                  colors={['#3b82f6', '#1d4ed8']}
-                  style={styles.logoGradient}
-                >
-                  <Feather name="activity" size={48} color="#ffffff" />
-                </LinearGradient>
+              <View style={styles.logoOuter}>
+                <View style={styles.logoInner}>
+                  <LinearGradient
+                    colors={['#00f2fe', '#4facfe']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.logoGradient}
+                  >
+                    <Feather name="activity" size={42} color="#ffffff" />
+                  </LinearGradient>
+                </View>
               </View>
             </View>
             <Text style={styles.appName}>GYM A.I.</Text>
-            <Text style={styles.appSubtitle}>COMPUTER VISION FITNESS TRACKER</Text>
+            <Text style={styles.appSubtitle}>COMPUTER VISION MOTION CAPTURE</Text>
           </View>
 
-          {/* Form Fields */}
-          <View style={styles.form}>
+          {/* Form Fields Card (Glassmorphic) */}
+          <View style={styles.glassCard}>
             {/* Email Input */}
             <View
               style={[
@@ -78,7 +85,7 @@ export default function LoginScreen({ onLoginSuccess, onBypassLogin }) {
               <Feather 
                 name="mail" 
                 size={20} 
-                color={isEmailFocused ? '#3b82f6' : '#64748b'} 
+                color={isEmailFocused ? '#00f2fe' : '#64748b'} 
                 style={styles.inputIcon}
               />
               <TextInput
@@ -105,7 +112,7 @@ export default function LoginScreen({ onLoginSuccess, onBypassLogin }) {
               <Feather 
                 name="lock" 
                 size={20} 
-                color={isPasswordFocused ? '#3b82f6' : '#64748b'} 
+                color={isPasswordFocused ? '#00f2fe' : '#64748b'} 
                 style={styles.inputIcon}
               />
               <TextInput
@@ -135,13 +142,13 @@ export default function LoginScreen({ onLoginSuccess, onBypassLogin }) {
 
             {/* Action Buttons */}
             <TouchableOpacity
-              activeOpacity={0.8}
+              activeOpacity={0.85}
               onPress={handleSignIn}
               disabled={loading}
               style={styles.signInButtonWrapper}
             >
               <LinearGradient
-                colors={['#3b82f6', '#1d4ed8']}
+                colors={['#00f2fe', '#4facfe']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={styles.signInButton}
@@ -185,29 +192,37 @@ const styles = StyleSheet.create({
   },
   keyboardView: {
     flex: 1,
-    paddingHorizontal: 30,
+    paddingHorizontal: 24,
     justifyContent: 'space-between',
-    paddingVertical: 30,
+    paddingVertical: 40,
   },
   header: {
     alignItems: 'center',
-    marginTop: 50,
+    marginTop: 40,
   },
   logoWrapper: {
     marginBottom: 20,
-    shadowColor: '#3b82f6',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowColor: '#00f2fe',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 10,
   },
-  logoOutline: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    backgroundColor: '#1e293b',
-    borderWidth: 2,
-    borderColor: '#38bdf8',
+  logoOuter: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(0, 242, 254, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(0, 242, 254, 0.25)',
+  },
+  logoInner: {
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+    backgroundColor: '#0f172a',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 3,
@@ -215,106 +230,111 @@ const styles = StyleSheet.create({
   logoGradient: {
     width: '100%',
     height: '100%',
-    borderRadius: 52,
+    borderRadius: 38,
     alignItems: 'center',
     justifyContent: 'center',
   },
   appName: {
-    fontSize: 32,
+    fontSize: 34,
     fontWeight: '900',
     color: '#ffffff',
-    letterSpacing: 3,
+    letterSpacing: 4,
     textAlign: 'center',
   },
   appSubtitle: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 10,
+    fontWeight: '800',
     color: '#38bdf8',
     marginTop: 8,
     letterSpacing: 2,
     textAlign: 'center',
   },
-  form: {
+  glassCard: {
     width: '100%',
+    backgroundColor: 'rgba(30, 41, 59, 0.45)',
+    borderRadius: 24,
+    padding: 20,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 15,
+    elevation: 8,
     marginTop: 20,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
-    borderRadius: 16,
-    height: 56,
-    paddingHorizontal: 18,
-    marginBottom: 18,
-    borderWidth: 1,
-    borderColor: '#334155',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    borderRadius: 14,
+    height: 54,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+    borderWidth: 1.2,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   inputWrapperFocused: {
-    borderColor: '#3b82f6',
+    borderColor: '#00f2fe',
     borderWidth: 1.5,
-    shadowColor: '#3b82f6',
+    shadowColor: '#00f2fe',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3,
   },
   inputIcon: {
-    marginRight: 12,
+    marginRight: 10,
   },
   input: {
     flex: 1,
     height: '100%',
-    fontSize: 16,
+    fontSize: 15,
     color: '#ffffff',
   },
   eyeIcon: {
     padding: 4,
   },
   signInButtonWrapper: {
-    shadowColor: '#3b82f6',
+    shadowColor: '#00f2fe',
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
+    shadowOpacity: 0.35,
     shadowRadius: 10,
     elevation: 6,
-    marginTop: 10,
+    marginTop: 8,
   },
   signInButton: {
-    borderRadius: 16,
-    height: 56,
+    borderRadius: 14,
+    height: 52,
     alignItems: 'center',
     justifyContent: 'center',
   },
   signInButtonText: {
     color: '#ffffff',
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: 'bold',
     letterSpacing: 0.5,
   },
   bypassButton: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 20,
-    height: 50,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: '#475569',
+    marginTop: 15,
+    height: 48,
+    borderRadius: 14,
+    borderWidth: 1.2,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
     backgroundColor: 'transparent',
   },
   bypassButtonText: {
     color: '#cbd5e1',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: 15,
   },
   footerText: {
     color: '#64748b',

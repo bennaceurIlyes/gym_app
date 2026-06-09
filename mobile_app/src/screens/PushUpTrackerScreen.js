@@ -41,7 +41,7 @@ export default function PushUpTrackerScreen({ onBack }) {
   const timerRef = useRef(null);
   const workoutDurationRef = useRef(0);
 
-  // Sanitizes IP inputs by removing http://, https://, ports, and trailing slashes
+  // Sanitizes IP inputs
   const sanitizeIp = (text) => {
     let cleaned = text.trim();
     cleaned = cleaned.replace(/^https?:\/\//i, '');
@@ -56,7 +56,7 @@ export default function PushUpTrackerScreen({ onBack }) {
     setConnectionStatus('connecting');
     try {
       const controller = new AbortController();
-      const id = setTimeout(() => controller.abort(), 3500); // 3.5 seconds timeout
+      const id = setTimeout(() => controller.abort(), 3500);
       
       const response = await fetch(`http://${cleanIp}:5000/health`, { 
         method: 'GET',
@@ -82,35 +82,26 @@ export default function PushUpTrackerScreen({ onBack }) {
       if (showAlert) {
         Alert.alert(
           'Connection Error',
-          `Could not connect to http://${cleanIp}:5000.\n\nTroubleshooting:\n1. Verify "python server.py" is running on your PC.\n2. Ensure both your PC and phone are connected to the SAME Wi-Fi network.\n3. Check that your PC's firewall isn't blocking port 5000.\n4. Double check the IP address (your PC's IP is ${cleanIp}).`
+          `Could not connect to http://${cleanIp}:5000.\n\nTroubleshooting:\n1. Verify "python server.py" is running on your PC.\n2. Ensure both your PC and phone are connected to the SAME Wi-Fi network.\n3. Check that your PC's firewall isn't blocking port 5000.`
         );
       }
       return false;
     }
   };
 
-  // Check native OS-level camera permission
+  // Check camera permission
   const requestCameraPermission = async () => {
     try {
       const { status } = await Camera.getCameraPermissionsAsync();
-      if (status === 'granted') {
-        return true;
-      }
-      
+      if (status === 'granted') return true;
       const requestResult = await Camera.requestCameraPermissionsAsync();
       return requestResult.status === 'granted';
     } catch (error) {
       console.log("Error requesting camera permission:", error);
-      try {
-        const { status } = await Camera.requestCameraPermissionsAsync();
-        return status === 'granted';
-      } catch (err) {
-        return false;
-      }
+      return false;
     }
   };
 
-  // Perform initial ping when moving to Pushup Tracker screen
   useEffect(() => {
     checkServerHealth(serverIp, false);
     return () => {
@@ -120,18 +111,16 @@ export default function PushUpTrackerScreen({ onBack }) {
     };
   }, []);
 
-  // Push-up server controls
+  // Controls
   const startWorkout = async () => {
     const isConnected = await checkServerHealth(serverIp, true);
-    if (!isConnected) {
-      return;
-    }
+    if (!isConnected) return;
 
     const hasCamPerm = await requestCameraPermission();
     if (!hasCamPerm) {
       Alert.alert(
         'Camera Permission Required',
-        'Gym AI needs camera access to track your exercises locally on your phone. Please grant permission in your system settings.'
+        'Gym AI needs camera access to track your exercises locally on your phone.'
       );
       return;
     }
@@ -161,7 +150,7 @@ export default function PushUpTrackerScreen({ onBack }) {
         }, 1000);
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to start mobile pose tracking. Please check server console.');
+      Alert.alert('Error', 'Failed to start mobile pose tracking.');
     }
   };
 
@@ -202,7 +191,7 @@ export default function PushUpTrackerScreen({ onBack }) {
   };
 
   return (
-    <LinearGradient colors={['#0f172a', '#1e293b']} style={styles.container}>
+    <LinearGradient colors={['#050811', '#0f172a']} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <StatusBar style="light" />
         
@@ -216,17 +205,17 @@ export default function PushUpTrackerScreen({ onBack }) {
             }}
             activeOpacity={0.7}
           >
-            <Feather name="arrow-left" size={24} color="#ffffff" />
+            <Feather name="chevron-left" size={24} color="#ffffff" />
           </TouchableOpacity>
           <Text style={styles.trackerTitle}>Push-Up AI Lab</Text>
-          <View style={{ width: 24 }} />
+          <View style={{ width: 40 }} />
         </View>
 
         <ScrollView contentContainerStyle={styles.trackerScroll}>
-          {/* IP Address Server Configurations */}
+          {/* IP Configurations (Glassmorphic) */}
           <View style={styles.serverConfigContainer}>
             <View style={styles.serverInputRow}>
-              <Text style={styles.serverLabel}>Host IP:</Text>
+              <Text style={styles.serverLabel}>Node IP:</Text>
               <TextInput
                 style={styles.serverInput}
                 placeholder="192.168.1.10"
@@ -244,21 +233,21 @@ export default function PushUpTrackerScreen({ onBack }) {
                 onPress={() => checkServerHealth(serverIp, true)}
                 activeOpacity={0.7}
               >
-                <Text style={styles.pingButtonText}>Test Connection</Text>
+                <Text style={styles.pingButtonText}>Connect</Text>
               </TouchableOpacity>
             </View>
 
             {/* Status Banner */}
             <View style={styles.connectionStatusRow}>
-              <Text style={styles.statusLabel}>AI Server Status:</Text>
+              <Text style={styles.statusLabel}>Telemetry Link:</Text>
               <View style={styles.statusIndicatorWrapper}>
                 <View 
                   style={[
                     styles.statusDot, 
                     { 
                       backgroundColor: 
-                        connectionStatus === 'connected' ? '#10b981' : 
-                        connectionStatus === 'connecting' ? '#f59e0b' : '#ef4444' 
+                        connectionStatus === 'connected' ? '#00F5A0' : 
+                        connectionStatus === 'connecting' ? '#FF9F43' : '#FF3B30' 
                     }
                   ]} 
                 />
@@ -266,18 +255,18 @@ export default function PushUpTrackerScreen({ onBack }) {
                   styles.statusIndicatorText,
                   {
                     color: 
-                      connectionStatus === 'connected' ? '#10b981' : 
-                      connectionStatus === 'connecting' ? '#f59e0b' : '#ef4444'
+                      connectionStatus === 'connected' ? '#00F5A0' : 
+                      connectionStatus === 'connecting' ? '#FF9F43' : '#FF3B30'
                   }
                 ]}>
-                  {connectionStatus === 'connected' ? 'Connected' : 
-                   connectionStatus === 'connecting' ? 'Connecting...' : 'Disconnected'}
+                  {connectionStatus === 'connected' ? 'CONNECTED' : 
+                   connectionStatus === 'connecting' ? 'CONNECTING...' : 'DISCONNECTED'}
                 </Text>
               </View>
             </View>
           </View>
 
-          {/* Pose Video Feed / Placeholder Frame */}
+          {/* Pose WebRTC Stream Frame */}
           <View style={styles.streamFrameWrapper}>
             {workoutActive && connectionStatus === 'connected' ? (
               <WebView
@@ -289,7 +278,6 @@ export default function PushUpTrackerScreen({ onBack }) {
                 mediaPlaybackRequiresUserAction={false}
                 originWhitelist={['*']}
                 onPermissionRequest={(request) => {
-                  // CRITICAL FOR ANDROID: Grants camera permission inside the WebView
                   request.grant(request.resources);
                 }}
                 onMessage={(event) => {
@@ -323,25 +311,25 @@ export default function PushUpTrackerScreen({ onBack }) {
             ) : (
               <View style={styles.streamPlaceholder}>
                 <LinearGradient
-                  colors={['rgba(30, 41, 59, 0.8)', 'rgba(15, 23, 42, 0.9)']}
+                  colors={['rgba(21, 32, 54, 0.65)', 'rgba(8, 14, 30, 0.85)']}
                   style={styles.placeholderGradient}
                 >
                   <View style={styles.radarRingOuter}>
                     <View style={styles.radarRingInner}>
                       <Feather 
                         name={connectionStatus === 'connected' ? "video" : "video-off"} 
-                        size={40} 
-                        color={connectionStatus === 'connected' ? '#3b82f6' : '#64748b'} 
+                        size={32} 
+                        color={connectionStatus === 'connected' ? '#00f2fe' : '#475569'} 
                       />
                     </View>
                   </View>
                   <Text style={styles.placeholderHeading}>
-                    {connectionStatus === 'connected' ? 'STREAM READY' : 'CONNECTION REQUIRED'}
+                    {connectionStatus === 'connected' ? 'CAMERA STREAM READY' : 'TELEMETRY OFFLINE'}
                   </Text>
                   <Text style={styles.placeholderDesc}>
                     {connectionStatus === 'connected' 
-                      ? 'Press START WORKOUT below to activate your mobile camera and start pose tracking.'
-                      : 'Please run "python server.py" on your PC, configure the host IP above, and verify connection status.'}
+                      ? 'Press START SESSION below to initialize body keypoint scanners.'
+                      : 'Launch local host server and connect your Wi-Fi node to stream telemetry.'}
                   </Text>
                 </LinearGradient>
               </View>
@@ -352,36 +340,36 @@ export default function PushUpTrackerScreen({ onBack }) {
           {workoutActive && (
             <View style={styles.metricsRow}>
               <View style={styles.metricCell}>
-                <Feather name="activity" size={14} color="#38bdf8" style={{ marginRight: 6 }} />
-                <Text style={styles.metricLabel}>ELBOW: </Text>
+                <Feather name="activity" size={14} color="#00f2fe" style={{ marginRight: 6 }} />
+                <Text style={styles.metricLabel}>ELBOW FLEX: </Text>
                 <Text style={styles.metricValue}>{elbowAngle !== null ? `${elbowAngle}°` : '---'}</Text>
               </View>
               <View style={styles.metricCell}>
-                <Feather name="sliders" size={14} color="#10b981" style={{ marginRight: 6 }} />
-                <Text style={styles.metricLabel}>SPINE: </Text>
+                <Feather name="sliders" size={14} color="#00F5A0" style={{ marginRight: 6 }} />
+                <Text style={styles.metricLabel}>SPINE LINE: </Text>
                 <Text style={styles.metricValue}>{backAngle !== null ? `${backAngle}°` : '---'}</Text>
               </View>
             </View>
           )}
 
-          {/* Realtime Stats HUD */}
+          {/* Realtime Stats HUD Dashboard */}
           <View style={styles.hudPanel}>
             {/* Good Reps Card */}
             <View style={styles.hudStatCard}>
-              <Text style={styles.hudLabel}>GOOD</Text>
-              <Text style={[styles.hudValueReps, { color: '#10b981' }]}>{goodReps}</Text>
+              <Text style={[styles.hudLabel, { color: '#00F5A0' }]}>GOOD</Text>
+              <Text style={[styles.hudValueReps, { color: '#00F5A0' }]}>{goodReps}</Text>
             </View>
 
             {/* Total Reps Card */}
-            <View style={styles.hudStatCard}>
-              <Text style={styles.hudLabel}>TOTAL</Text>
+            <View style={[styles.hudStatCard, { borderColor: 'rgba(255,255,255,0.12)' }]}>
+              <Text style={[styles.hudLabel, { color: '#cbd5e1' }]}>TOTAL</Text>
               <Text style={[styles.hudValueReps, { color: '#ffffff' }]}>{reps}</Text>
             </View>
 
             {/* Bad Reps Card */}
             <View style={styles.hudStatCard}>
-              <Text style={styles.hudLabel}>BAD</Text>
-              <Text style={[styles.hudValueReps, { color: '#ef4444' }]}>{badReps}</Text>
+              <Text style={[styles.hudLabel, { color: '#FF3B30' }]}>BAD</Text>
+              <Text style={[styles.hudValueReps, { color: '#FF3B30' }]}>{badReps}</Text>
             </View>
           </View>
 
@@ -390,7 +378,7 @@ export default function PushUpTrackerScreen({ onBack }) {
             {/* Accuracy Card */}
             <View style={styles.hudStatCardSecondary}>
               <Text style={styles.hudLabelSecondary}>ACCURACY</Text>
-              <Text style={[styles.hudValueSecondary, { color: '#38bdf8' }]}>{accuracy}%</Text>
+              <Text style={[styles.hudValueSecondary, { color: '#00f2fe' }]}>{accuracy}%</Text>
             </View>
 
             {/* Stage Card */}
@@ -398,28 +386,31 @@ export default function PushUpTrackerScreen({ onBack }) {
               <Text style={styles.hudLabelSecondary}>STAGE</Text>
               <View style={[
                 styles.hudBadge,
-                { backgroundColor: stage === 'down' ? '#3b82f6' : '#10b981' }
+                { backgroundColor: stage === 'down' ? 'rgba(0, 242, 254, 0.12)' : 'rgba(0, 245, 160, 0.12)' }
               ]}>
-                <Text style={styles.hudBadgeText}>{stage.toUpperCase()}</Text>
+                <Text style={[
+                  styles.hudBadgeText,
+                  { color: stage === 'down' ? '#00f2fe' : '#00F5A0' }
+                ]}>{stage.toUpperCase()}</Text>
               </View>
             </View>
           </View>
 
-          {/* Form Feedback Banner */}
+          {/* Form Feedback Translucent Banner */}
           {workoutActive && (
             <View 
               style={[
                 styles.feedbackBanner, 
                 { 
-                  backgroundColor: feedbackColor ? feedbackColor + '15' : '#3b82f615',
-                  borderColor: feedbackColor || '#3b82f6',
+                  backgroundColor: feedbackColor ? feedbackColor + '12' : 'rgba(0, 242, 254, 0.08)',
+                  borderColor: feedbackColor || '#00f2fe',
                 }
               ]}
             >
               <Feather 
                 name={feedback.includes('KEEP') || feedback.includes('ERROR') || feedback.includes('PLEASE') ? "alert-circle" : "check-circle"} 
-                size={20} 
-                color={feedbackColor || '#3b82f6'} 
+                size={18} 
+                color={feedbackColor || '#00f2fe'} 
                 style={{ marginRight: 8 }}
               />
               <Text 
@@ -437,33 +428,33 @@ export default function PushUpTrackerScreen({ onBack }) {
           <View style={styles.actionButtonsContainer}>
             {!workoutActive ? (
               <TouchableOpacity
-                activeOpacity={0.8}
+                activeOpacity={0.85}
                 onPress={startWorkout}
                 style={styles.actionButtonStartWrapper}
               >
                 <LinearGradient
-                  colors={['#10b981', '#059669']}
+                  colors={['#00F5A0', '#059669']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={styles.actionButton}
                 >
-                  <Feather name="play" size={20} color="#ffffff" style={{ marginRight: 8 }} />
+                  <Feather name="play" size={18} color="#ffffff" style={{ marginRight: 8 }} />
                   <Text style={styles.actionButtonText}>Start Session</Text>
                 </LinearGradient>
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
-                activeOpacity={0.8}
+                activeOpacity={0.85}
                 onPress={stopWorkout}
                 style={styles.actionButtonStopWrapper}
               >
                 <LinearGradient
-                  colors={['#ef4444', '#dc2626']}
+                  colors={['#FF3B30', '#c21807']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={styles.actionButton}
                 >
-                  <Feather name="square" size={20} color="#ffffff" style={{ marginRight: 8 }} />
+                  <Feather name="square" size={16} color="#ffffff" style={{ marginRight: 8 }} />
                   <Text style={styles.actionButtonText}>End Session</Text>
                 </LinearGradient>
               </TouchableOpacity>
@@ -471,7 +462,7 @@ export default function PushUpTrackerScreen({ onBack }) {
           </View>
         </ScrollView>
 
-        {/* Session Summary Modal */}
+        {/* Workout Complete Award Summary Modal */}
         <Modal
           animationType="slide"
           transparent={true}
@@ -481,23 +472,23 @@ export default function PushUpTrackerScreen({ onBack }) {
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <LinearGradient
-                colors={['#1e293b', '#0f172a']}
+                colors={['#0f172a', '#050811']}
                 style={styles.modalGradient}
               >
                 <View style={styles.modalAwardIconWrapper}>
-                  <Feather name="award" size={48} color="#f59e0b" />
+                  <Feather name="award" size={44} color="#FF9F43" />
                 </View>
                 <Text style={styles.modalTitle}>Workout Completed!</Text>
-                <Text style={styles.modalSubtitle}>Awesome performance. Here is your summary:</Text>
+                <Text style={styles.modalSubtitle}>Pose tracker finalized. Summary stats generated:</Text>
 
                 <View style={styles.summaryStatsGrid}>
                   <View style={styles.summaryStatBox}>
                     <Text style={styles.summaryStatLabel}>Good Reps</Text>
-                    <Text style={[styles.summaryStatValue, { color: '#10b981' }]}>{summaryData.goodReps || 0}</Text>
+                    <Text style={[styles.summaryStatValue, { color: '#00F5A0' }]}>{summaryData.goodReps || 0}</Text>
                   </View>
                   <View style={styles.summaryStatBox}>
                     <Text style={styles.summaryStatLabel}>Bad Reps</Text>
-                    <Text style={[styles.summaryStatValue, { color: '#ef4444' }]}>{summaryData.badReps || 0}</Text>
+                    <Text style={[styles.summaryStatValue, { color: '#FF3B30' }]}>{summaryData.badReps || 0}</Text>
                   </View>
                 </View>
 
@@ -513,8 +504,8 @@ export default function PushUpTrackerScreen({ onBack }) {
                 </View>
 
                 <View style={[styles.summaryStatBox, { width: '100%', marginBottom: 25 }]}>
-                  <Text style={styles.summaryStatLabel}>Accuracy Score</Text>
-                  <Text style={[styles.summaryStatValue, { color: '#38bdf8' }]}>
+                  <Text style={styles.summaryStatLabel}>Form Accuracy Score</Text>
+                  <Text style={[styles.summaryStatValue, { color: '#00f2fe', fontSize: 36 }]}>
                     {summaryData.reps === 0 ? 100 : Math.round(((summaryData.goodReps || 0) / summaryData.reps) * 100)}%
                   </Text>
                 </View>
@@ -522,10 +513,10 @@ export default function PushUpTrackerScreen({ onBack }) {
                 <TouchableOpacity
                   style={styles.modalCloseButton}
                   onPress={() => setShowSummary(false)}
-                  activeOpacity={0.8}
+                  activeOpacity={0.85}
                 >
                   <LinearGradient
-                    colors={['#3b82f6', '#1d4ed8']}
+                    colors={['#00f2fe', '#007BFF']}
                     style={styles.modalCloseButtonGradient}
                   >
                     <Text style={styles.modalCloseButtonText}>Done</Text>
@@ -552,18 +543,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderColor: '#1e293b',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1.2,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
   },
   backButton: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 10,
-    backgroundColor: '#1e293b',
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   trackerTitle: {
     fontSize: 18,
@@ -571,16 +564,16 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   trackerScroll: {
-    padding: 20,
-    paddingBottom: 50,
+    padding: 16,
+    paddingBottom: 40,
   },
   serverConfigContainer: {
-    backgroundColor: '#1e293b',
-    borderRadius: 16,
+    backgroundColor: 'rgba(30, 41, 59, 0.4)',
+    borderRadius: 18,
     padding: 15,
-    borderWidth: 1,
-    borderColor: '#334155',
-    marginBottom: 20,
+    borderWidth: 1.2,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    marginBottom: 16,
   },
   serverInputRow: {
     flexDirection: 'row',
@@ -589,32 +582,32 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   serverLabel: {
-    fontSize: 14,
-    color: '#94a3b8',
-    fontWeight: '600',
+    fontSize: 13,
+    color: '#64748b',
+    fontWeight: '700',
   },
   serverInput: {
     flex: 1,
-    height: 40,
-    backgroundColor: '#0f172a',
-    borderRadius: 8,
+    height: 38,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    borderRadius: 10,
     paddingHorizontal: 12,
     color: '#ffffff',
     borderWidth: 1,
-    borderColor: '#475569',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
     fontSize: 14,
   },
   pingButton: {
-    backgroundColor: '#3b82f6',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    height: 40,
+    backgroundColor: '#007BFF',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    height: 38,
     alignItems: 'center',
     justifyContent: 'center',
   },
   pingButtonText: {
     color: '#ffffff',
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
   },
   connectionStatusRow: {
@@ -622,12 +615,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: '#334155',
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
     paddingTop: 10,
   },
   statusLabel: {
-    fontSize: 13,
-    color: '#94a3b8',
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '600',
   },
   statusIndicatorWrapper: {
     flexDirection: 'row',
@@ -635,28 +629,29 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   statusIndicatorText: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   streamFrameWrapper: {
     width: '100%',
     aspectRatio: 4 / 3,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#050811',
     borderRadius: 20,
     overflow: 'hidden',
     borderWidth: 1.5,
-    borderColor: '#334155',
-    marginBottom: 20,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    marginBottom: 15,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 6,
   },
   streamFrame: {
     width: '100%',
@@ -672,129 +667,40 @@ const styles = StyleSheet.create({
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 30,
+    padding: 24,
   },
   radarRingOuter: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: 'rgba(59, 130, 246, 0.08)',
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: 'rgba(0, 242, 254, 0.06)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 15,
-    borderWidth: 1,
-    borderColor: 'rgba(59, 130, 246, 0.2)',
+    marginBottom: 14,
+    borderWidth: 1.2,
+    borderColor: 'rgba(0, 242, 254, 0.15)',
   },
   radarRingInner: {
-    width: 66,
-    height: 66,
-    borderRadius: 33,
-    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(0, 242, 254, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   placeholderHeading: {
-    fontSize: 16,
-    fontWeight: '850',
+    fontSize: 14,
+    fontWeight: '800',
     color: '#ffffff',
     letterSpacing: 1,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   placeholderDesc: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#64748b',
     textAlign: 'center',
-    lineHeight: 18,
-  },
-  hudPanel: {
-    flexDirection: 'row',
-    gap: 15,
-    marginBottom: 15,
-  },
-  hudStatCard: {
-    flex: 1,
-    backgroundColor: '#1e293b',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#334155',
-    padding: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 100,
-  },
-  hudLabel: {
-    fontSize: 12,
-    fontWeight: '750',
-    color: '#94a3b8',
-    letterSpacing: 1,
-    marginBottom: 8,
-  },
-  hudValueReps: {
-    fontSize: 48,
-    fontWeight: '900',
-    color: '#10b981',
-  },
-  hudBadge: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-  },
-  hudBadgeText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
-  feedbackBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 16,
-    borderWidth: 1.5,
-    padding: 16,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-  },
-  feedbackBannerText: {
-    fontSize: 15,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-  actionButtonsContainer: {
-    width: '100%',
-  },
-  actionButtonStartWrapper: {
-    shadowColor: '#10b981',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  actionButtonStopWrapper: {
-    shadowColor: '#ef4444',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    height: 56,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  actionButtonText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '800',
+    lineHeight: 16,
+    paddingHorizontal: 10,
   },
   metricsRow: {
     flexDirection: 'row',
@@ -808,17 +714,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1e293b',
+    backgroundColor: 'rgba(30, 41, 59, 0.4)',
     borderRadius: 12,
     paddingVertical: 10,
     paddingHorizontal: 15,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   metricLabel: {
-    color: '#94a3b8',
-    fontSize: 11,
-    fontWeight: '700',
+    color: '#64748b',
+    fontSize: 10,
+    fontWeight: '800',
     letterSpacing: 0.5,
   },
   metricValue: {
@@ -826,108 +732,193 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
   },
-  hudStatCardSecondary: {
+  hudPanel: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+  },
+  hudStatCard: {
     flex: 1,
-    backgroundColor: '#1e293b',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#334155',
-    padding: 12,
+    backgroundColor: 'rgba(30, 41, 59, 0.45)',
+    borderRadius: 18,
+    borderWidth: 1.2,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 70,
+    minHeight: 88,
+  },
+  hudStatCardSecondary: {
+    flex: 1,
+    backgroundColor: 'rgba(30, 41, 59, 0.45)',
+    borderRadius: 18,
+    borderWidth: 1.2,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 68,
+  },
+  hudLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1,
+    marginBottom: 4,
   },
   hudLabelSecondary: {
-    fontSize: 10,
-    fontWeight: '750',
-    color: '#94a3b8',
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#64748b',
     letterSpacing: 0.5,
     marginBottom: 2,
   },
-  hudValueSecondary: {
-    fontSize: 22,
+  hudValueReps: {
+    fontSize: 34,
     fontWeight: '900',
+  },
+  hudValueSecondary: {
+    fontSize: 20,
+    fontWeight: '900',
+  },
+  hudBadge: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  hudBadgeText: {
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  feedbackBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 14,
+    borderWidth: 1.2,
+    padding: 14,
+    marginBottom: 18,
+  },
+  feedbackBannerText: {
+    fontSize: 14,
+    fontWeight: '800',
+    textAlign: 'center',
+    letterSpacing: 0.2,
+  },
+  actionButtonsContainer: {
+    width: '100%',
+  },
+  actionButtonStartWrapper: {
+    shadowColor: '#00F5A0',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  actionButtonStopWrapper: {
+    shadowColor: '#FF3B30',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    height: 52,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '800',
   },
 
   // SUMMARY MODAL STYLE SHEET
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    backgroundColor: 'rgba(5, 8, 17, 0.88)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContent: {
-    width: width - 40,
+    width: width - 48,
     borderRadius: 24,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#334155',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.35,
+    shadowRadius: 20,
+    elevation: 10,
   },
   modalGradient: {
-    padding: 30,
+    padding: 24,
     alignItems: 'center',
   },
   modalAwardIconWrapper: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: 'rgba(255, 159, 67, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.2)',
+    marginBottom: 16,
+    borderWidth: 1.2,
+    borderColor: 'rgba(255, 159, 67, 0.25)',
   },
   modalTitle: {
     fontSize: 22,
     fontWeight: '900',
     color: '#ffffff',
-    marginBottom: 10,
+    marginBottom: 8,
     textAlign: 'center',
   },
   modalSubtitle: {
-    fontSize: 14,
-    color: '#94a3b8',
+    fontSize: 13,
+    color: '#64748b',
     textAlign: 'center',
-    marginBottom: 25,
-    lineHeight: 20,
+    marginBottom: 20,
+    lineHeight: 18,
   },
   summaryStatsGrid: {
     flexDirection: 'row',
-    gap: 15,
+    gap: 12,
     width: '100%',
-    marginBottom: 30,
+    marginBottom: 12,
   },
   summaryStatBox: {
     flex: 1,
-    backgroundColor: '#1e293b',
+    backgroundColor: 'rgba(30, 41, 59, 0.45)',
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#334155',
-    padding: 20,
+    borderWidth: 1.2,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    padding: 16,
     alignItems: 'center',
   },
   summaryStatLabel: {
-    fontSize: 12,
-    color: '#94a3b8',
-    fontWeight: '600',
-    marginBottom: 6,
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '700',
+    marginBottom: 4,
   },
   summaryStatValue: {
-    fontSize: 32,
+    fontSize: 26,
     fontWeight: '950',
-    color: '#38bdf8',
+    color: '#ffffff',
   },
   modalCloseButton: {
     width: '100%',
-    shadowColor: '#3b82f6',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
+    shadowColor: '#00f2fe',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
     elevation: 3,
   },
   modalCloseButtonGradient: {
-    height: 52,
+    height: 48,
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
