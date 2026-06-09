@@ -11,14 +11,25 @@ CORS(app)
 
 # Global variables for state management
 session_active = False
-counter = 0
+total_reps = 0
+good_reps = 0
+bad_reps = 0
 stage = "up"
 feedback_message = "START PUSH-UPS"
 feedback_color_hex = "#FFFF00"  # Yellow
 feedback_timer = 0
 last_rep_time = 0
-is_rep_valid = True
 latest_frame = None
+
+# Rep-specific tracking state
+in_rep = False
+rep_min_elbow_angle = 180.0
+rep_is_form_valid = True
+rep_feedback = "GOOD"
+
+# Live metrics
+current_elbow_angle = 180.0
+current_back_angle = 180.0
 
 thread_lock = threading.Lock()
 camera_thread = None
@@ -82,7 +93,7 @@ def get_placeholder_frame(text="CAMERA INACTIVE"):
     return jpeg.tobytes()
 
 def pose_estimation_loop():
-    global session_active, counter, stage, feedback_message, feedback_color_hex, feedback_timer, last_rep_time, is_rep_valid, latest_frame
+    global session_active, total_reps, good_reps, bad_reps, stage, feedback_message, feedback_color_hex, feedback_timer, last_rep_time, in_rep, rep_min_elbow_angle, rep_is_form_valid, rep_feedback, current_elbow_angle, current_back_angle, latest_frame
     
     mp_pose = mp.solutions.pose
     pose = mp_pose.Pose(
@@ -100,13 +111,20 @@ def pose_estimation_loop():
         
     # Reset stats for new session
     with thread_lock:
-        counter = 0
+        total_reps = 0
+        good_reps = 0
+        bad_reps = 0
         stage = "up"
         feedback_message = "START PUSH-UPS"
         feedback_color_hex = "#FFFF00"
         feedback_timer = time.time()
         last_rep_time = 0
-        is_rep_valid = True
+        in_rep = False
+        rep_min_elbow_angle = 180.0
+        rep_is_form_valid = True
+        rep_feedback = "GOOD"
+        current_elbow_angle = 180.0
+        current_back_angle = 180.0
         latest_frame = None
 
     # Colors for OpenCV drawing (BGR format)
@@ -227,16 +245,22 @@ def pose_estimation_loop():
 
             # Elbow angles
             arm_angles = []
+            l_elbow_angle = None
+            r_elbow_angle = None
             if use_3d:
                 if l_arm_visible:
-                    arm_angles.append(calculate_3d_angle(l_shoulder_world, l_elbow_world, l_wrist_world))
+                    l_elbow_angle = calculate_3d_angle(l_shoulder_world, l_elbow_world, l_wrist_world)
+                    arm_angles.append(l_elbow_angle)
                 if r_arm_visible:
-                    arm_angles.append(calculate_3d_angle(r_shoulder_world, r_elbow_world, r_wrist_world))
+                    r_elbow_angle = calculate_3d_angle(r_shoulder_world, r_elbow_world, r_wrist_world)
+                    arm_angles.append(r_elbow_angle)
             else:
                 if l_arm_visible:
-                    arm_angles.append(calculate_angle(l_shoulder, l_elbow, l_wrist))
+                    l_elbow_angle = calculate_angle(l_shoulder, l_elbow, l_wrist)
+                    arm_angles.append(l_elbow_angle)
                 if r_arm_visible:
-                    arm_angles.append(calculate_angle(r_shoulder, r_elbow, r_wrist))
+                    r_elbow_angle = calculate_angle(r_shoulder, r_elbow, r_wrist)
+                    arm_angles.append(r_elbow_angle)
             
             arm_angles = [a for a in arm_angles if a is not None]
             if arm_angles:
@@ -295,49 +319,74 @@ def pose_estimation_loop():
                 if vertical_ratios:
                     vertical_ratio = np.mean(vertical_ratios)
 
-            # Fallback to True if landmarks are missing, or check if ratio < 0.85 (more lenient)
-            is_horizontal = (vertical_ratio is None or vertical_ratio < 0.85)
+            # Classify orientation: Torso angle with horizontal plane must be horizontal (ratio < 0.65)
+            is_horizontal = (vertical_ratio is None or vertical_ratio < 0.65)
 
             with thread_lock:
+                if elbow_angle is not None:
+                    current_elbow_angle = float(elbow_angle)
+                if back_angle is not None:
+                    current_back_angle = float(back_angle)
+
                 if is_horizontal:
                     if elbow_angle is not None:
-                        # 1. Going down: Transition from UP to DOWN (more lenient: < 115)
-                        if stage == "up" and elbow_angle < 115:
+                        # 1. Detect start of rep (elbow bends below 120 degrees)
+                        if not in_rep and elbow_angle < 120:
+                            in_rep = True
+                            rep_min_elbow_angle = elbow_angle
+                            rep_is_form_valid = True
+                            rep_feedback = "GOOD"
                             stage = "down"
-                            is_rep_valid = True
 
-                        # 2. Monitoring phase
-                        if stage == "down":
-                            # Posture angle checks (more lenient: < 135)
-                            if back_angle is not None and back_angle < 135:
-                                is_rep_valid = False
-                            if plank_angle is not None and plank_angle < 135:
-                                is_rep_valid = False
+                        if in_rep:
+                            # Track minimum elbow angle reached (depth)
+                            rep_min_elbow_angle = min(rep_min_elbow_angle, elbow_angle)
 
-                            # 3. Pushing up: Complete the cycle (more lenient: > 140)
-                            if elbow_angle > 140:
-                                stage = "up"
-                                if current_time - last_rep_time > 1.2:
-                                    counter += 1  # ALWAYS count the completed rep!
-                                    if is_rep_valid:
+                            # Monitor posture/core alignment during the ENTIRE rep
+                            if back_angle is not None and back_angle < 145:
+                                rep_is_form_valid = False
+                                rep_feedback = "KEEP CORE STRAIGHT / DON'T SAG HIPS"
+                            if plank_angle is not None and plank_angle < 145:
+                                rep_is_form_valid = False
+                                rep_feedback = "KEEP CORE STRAIGHT"
+
+                            # 2. Detect end of rep (elbow extends back above 150 degrees)
+                            if elbow_angle > 150:
+                                if current_time - last_rep_time > 1.0:  # Debounce filter
+                                    is_deep_enough = (rep_min_elbow_angle < 100)
+                                    
+                                    if not is_deep_enough:
+                                        bad_reps += 1
+                                        feedback_message = "GO DEEPER!"
+                                        feedback_color_hex = "#f59e0b"  # Warning Orange
+                                    elif not rep_is_form_valid:
+                                        bad_reps += 1
+                                        feedback_message = rep_feedback
+                                        feedback_color_hex = "#FF3232"  # Crimson Red
+                                    else:
+                                        good_reps += 1
                                         feedback_message = "GOOD REP!"
                                         feedback_color_hex = "#7FFF00"  # Neon Green
-                                    else:
-                                        feedback_message = "REP COUNTED! KEEP CORE TIGHT."
-                                        feedback_color_hex = "#f59e0b"  # Warning Orange
+                                    
+                                    total_reps = good_reps + bad_reps
                                     last_rep_time = current_time
                                     feedback_timer = current_time
+                                
+                                in_rep = False
+                                stage = "up"
                 else:
-                    # Standing check: only reset if elbows are straight AND we are clearly standing (vertical_ratio > 0.88)
-                    if vertical_ratio is not None and vertical_ratio > 0.88:
-                        if elbow_angle is None or elbow_angle > 130:
-                            stage = "up"
-                            is_rep_valid = False
+                    # If user stands up clearly, reset state
+                    if vertical_ratio is not None and vertical_ratio > 0.85:
+                        in_rep = False
+                        stage = "up"
+                        feedback_message = "PLEASE LIE DOWN TO PLANK"
+                        feedback_color_hex = "#FFFF00"
+                        feedback_timer = current_time
 
             # Draw lines and overlays
             if l_shoulder_lm.visibility > 0.5 and l_hip_lm.visibility > 0.5:
-                l_back_ok = (l_back_angle is None or l_back_angle > 150)
-                l_plank_ok = (l_plank_angle is None or l_plank_angle > 150)
+                l_back_ok = (l_back_angle is None or l_back_angle > 145)
+                l_plank_ok = (l_plank_angle is None or l_plank_angle > 145)
                 l_form_ok = l_back_ok and l_plank_ok
                 back_color = GREEN if (l_form_ok and is_horizontal) else RED
                 
@@ -353,8 +402,8 @@ def pose_estimation_loop():
                         cv2.circle(frame, l_ankle, 8, WHITE, -1)
 
             if r_shoulder_lm.visibility > 0.5 and r_hip_lm.visibility > 0.5:
-                r_back_ok = (r_back_angle is None or r_back_angle > 150)
-                r_plank_ok = (r_plank_angle is None or r_plank_angle > 150)
+                r_back_ok = (r_back_angle is None or r_back_angle > 145)
+                r_plank_ok = (r_plank_angle is None or r_plank_angle > 145)
                 r_form_ok = r_back_ok and r_plank_ok
                 back_color = GREEN if (r_form_ok and is_horizontal) else RED
                 
@@ -374,7 +423,7 @@ def pose_estimation_loop():
                 cv2.line(frame, l_elbow, l_wrist, BLUE, 4)
                 cv2.circle(frame, l_elbow, 8, WHITE, -1)
                 cv2.circle(frame, l_wrist, 8, WHITE, -1)
-                cv2.putText(frame, f"L: {int(l_elbow_angle)}", (l_elbow[0] - 50, l_elbow[1] - 15),
+                cv2.putText(frame, f"L: {int(elbow_angle)}", (l_elbow[0] - 50, l_elbow[1] - 15),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, YELLOW, 2)
 
             if r_arm_visible:
@@ -382,7 +431,7 @@ def pose_estimation_loop():
                 cv2.line(frame, r_elbow, r_wrist, BLUE, 4)
                 cv2.circle(frame, r_elbow, 8, WHITE, -1)
                 cv2.circle(frame, r_wrist, 8, WHITE, -1)
-                cv2.putText(frame, f"R: {int(r_elbow_angle)}", (r_elbow[0] + 10, r_elbow[1] - 15),
+                cv2.putText(frame, f"R: {int(elbow_angle)}", (r_elbow[0] + 10, r_elbow[1] - 15),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, YELLOW, 2)
 
         # Draw HUD Panel
@@ -390,27 +439,30 @@ def pose_estimation_loop():
         cv2.rectangle(overlay, (0, 0), (w, 80), (30, 30, 30), -1)
         cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
 
-        cv2.putText(frame, f"REPS: {counter}", (30, 50), cv2.FONT_HERSHEY_DUPLEX, 1.1, GREEN, 2)
-        cv2.putText(frame, f"STAGE: {stage.upper()}", (210, 50), cv2.FONT_HERSHEY_DUPLEX, 0.9, WHITE, 2)
+        # Calculate Accuracy
+        accuracy = 100 if total_reps == 0 else int((good_reps / total_reps) * 100)
+
+        cv2.putText(frame, f"GOOD: {good_reps}  BAD: {bad_reps}  ACC: {accuracy}%", (20, 30), cv2.FONT_HERSHEY_DUPLEX, 0.7, GREEN, 2)
+        cv2.putText(frame, f"STAGE: {stage.upper()}", (20, 65), cv2.FONT_HERSHEY_DUPLEX, 0.7, WHITE, 2)
 
         with thread_lock:
             msg = feedback_message
-            color = GREEN if feedback_color_hex == "#7FFF00" else (RED if feedback_color_hex == "#FF3232" else YELLOW)
+            color = GREEN if feedback_color_hex == "#7FFF00" else (RED if feedback_color_hex == "#FF3232" else (ORANGE if feedback_color_hex == "#f59e0b" else YELLOW))
         
         if msg:
-            cv2.putText(frame, msg, (390, 50), cv2.FONT_HERSHEY_DUPLEX, 0.8, color, 2)
+            cv2.putText(frame, msg, (350, 50), cv2.FONT_HERSHEY_DUPLEX, 0.8, color, 2)
         else:
-            if vertical_ratio is not None and vertical_ratio >= 0.55:
-                cv2.putText(frame, "PLEASE LIE DOWN TO PLANK", (390, 50), cv2.FONT_HERSHEY_DUPLEX, 0.8, YELLOW, 2)
+            if vertical_ratio is not None and vertical_ratio >= 0.65:
+                cv2.putText(frame, "PLEASE LIE DOWN TO PLANK", (350, 50), cv2.FONT_HERSHEY_DUPLEX, 0.8, YELLOW, 2)
             elif back_angle is not None or plank_angle is not None:
-                bad_back = (back_angle is not None and back_angle < 150)
-                bad_plank = (plank_angle is not None and plank_angle < 150)
+                bad_back = (back_angle is not None and back_angle < 145)
+                bad_plank = (plank_angle is not None and plank_angle < 145)
                 if bad_back or bad_plank:
-                    cv2.putText(frame, "KEEP CORE ALIGNED!", (390, 50), cv2.FONT_HERSHEY_DUPLEX, 0.8, RED, 2)
+                    cv2.putText(frame, "KEEP CORE ALIGNED!", (350, 50), cv2.FONT_HERSHEY_DUPLEX, 0.8, RED, 2)
                 else:
-                    cv2.putText(frame, "FORM: GOOD", (390, 50), cv2.FONT_HERSHEY_DUPLEX, 0.8, GREEN, 2)
+                    cv2.putText(frame, "FORM: GOOD", (350, 50), cv2.FONT_HERSHEY_DUPLEX, 0.8, GREEN, 2)
             else:
-                cv2.putText(frame, "FORM: DETECTING...", (390, 50), cv2.FONT_HERSHEY_DUPLEX, 0.8, YELLOW, 2)
+                cv2.putText(frame, "FORM: DETECTING...", (350, 50), cv2.FONT_HERSHEY_DUPLEX, 0.8, YELLOW, 2)
 
         # Encode as JPEG
         ret, jpeg = cv2.imencode('.jpg', frame)
@@ -429,20 +481,27 @@ def health():
 
 @app.route('/start', methods=['POST'])
 def start_session():
-    global session_active, camera_thread, stop_event, counter, stage, feedback_message, feedback_color_hex, feedback_timer, last_rep_time, is_rep_valid, latest_frame
+    global session_active, camera_thread, stop_event, total_reps, good_reps, bad_reps, stage, feedback_message, feedback_color_hex, feedback_timer, last_rep_time, in_rep, rep_min_elbow_angle, rep_is_form_valid, rep_feedback, current_elbow_angle, current_back_angle, latest_frame
     
     data = request.json or {}
     mode = data.get('mode', 'pc')  # 'pc' or 'mobile'
     
     with thread_lock:
         # Reset stats
-        counter = 0
+        total_reps = 0
+        good_reps = 0
+        bad_reps = 0
         stage = "up"
         feedback_message = "START PUSH-UPS"
         feedback_color_hex = "#FFFF00"
         feedback_timer = time.time()
         last_rep_time = 0
-        is_rep_valid = True
+        in_rep = False
+        rep_min_elbow_angle = 180.0
+        rep_is_form_valid = True
+        rep_feedback = "GOOD"
+        current_elbow_angle = 180.0
+        current_back_angle = 180.0
         latest_frame = None
         
         if session_active:
@@ -460,7 +519,7 @@ def start_session():
 
 @app.route('/stop', methods=['POST'])
 def stop_session():
-    global session_active, stop_event, camera_thread
+    global session_active, stop_event, camera_thread, total_reps, good_reps, bad_reps
     with thread_lock:
         if not session_active:
             return jsonify({"status": "not_running"}), 200
@@ -471,22 +530,31 @@ def stop_session():
     if camera_thread:
         camera_thread.join(timeout=3.0)
         
-    return jsonify({"status": "stopped", "reps": counter}), 200
+    return jsonify({
+        "status": "stopped",
+        "reps": total_reps,
+        "good_reps": good_reps,
+        "bad_reps": bad_reps
+    }), 200
 
 @app.route('/status', methods=['GET'])
 def get_status():
     with thread_lock:
         return jsonify({
             "active": session_active,
-            "reps": counter,
+            "reps": total_reps,
+            "good_reps": good_reps,
+            "bad_reps": bad_reps,
             "stage": stage,
             "feedback": feedback_message,
-            "color": feedback_color_hex
+            "color": feedback_color_hex,
+            "elbow_angle": current_elbow_angle,
+            "back_angle": current_back_angle
         }), 200
 
 @app.route('/process_landmarks', methods=['POST'])
 def process_landmarks():
-    global counter, stage, feedback_message, feedback_color_hex, feedback_timer, last_rep_time, is_rep_valid, session_active
+    global total_reps, good_reps, bad_reps, stage, feedback_message, feedback_color_hex, feedback_timer, last_rep_time, in_rep, rep_min_elbow_angle, rep_is_form_valid, rep_feedback, current_elbow_angle, current_back_angle, session_active
     
     data = request.json or {}
     landmarks = data.get('landmarks')
@@ -495,10 +563,14 @@ def process_landmarks():
     if not landmarks:
         return jsonify({
             "active": session_active,
-            "reps": counter,
+            "reps": total_reps,
+            "good_reps": good_reps,
+            "bad_reps": bad_reps,
             "stage": stage,
             "feedback": feedback_message,
-            "color": feedback_color_hex
+            "color": feedback_color_hex,
+            "elbow_angle": current_elbow_angle,
+            "back_angle": current_back_angle
         }), 200
         
     current_time = time.time()
@@ -562,16 +634,22 @@ def process_landmarks():
 
     # Elbow angles
     arm_angles = []
+    l_elbow_angle = None
+    r_elbow_angle = None
     if use_3d:
         if l_arm_visible and l_shoulder_world and l_elbow_world and l_wrist_world:
-            arm_angles.append(calculate_3d_angle(l_shoulder_world, l_elbow_world, l_wrist_world))
+            l_elbow_angle = calculate_3d_angle(l_shoulder_world, l_elbow_world, l_wrist_world)
+            arm_angles.append(l_elbow_angle)
         if r_arm_visible and r_shoulder_world and r_elbow_world and r_wrist_world:
-            arm_angles.append(calculate_3d_angle(r_shoulder_world, r_elbow_world, r_wrist_world))
+            r_elbow_angle = calculate_3d_angle(r_shoulder_world, r_elbow_world, r_wrist_world)
+            arm_angles.append(r_elbow_angle)
     else:
         if l_arm_visible:
-            arm_angles.append(calculate_angle(coord(l_shoulder_lm), coord(l_elbow_lm), coord(l_wrist_lm)))
+            l_elbow_angle = calculate_angle(coord(l_shoulder_lm), coord(l_elbow_lm), coord(l_wrist_lm))
+            arm_angles.append(l_elbow_angle)
         if r_arm_visible:
-            arm_angles.append(calculate_angle(coord(r_shoulder_lm), coord(r_elbow_lm), coord(r_wrist_lm)))
+            r_elbow_angle = calculate_angle(coord(r_shoulder_lm), coord(r_elbow_lm), coord(r_wrist_lm))
+            arm_angles.append(r_elbow_angle)
             
     arm_angles = [a for a in arm_angles if a is not None]
     if arm_angles:
@@ -628,55 +706,81 @@ def process_landmarks():
         if vertical_ratios:
             vertical_ratio = np.mean(vertical_ratios)
 
-    # Fallback to True if landmarks are missing, or check if ratio < 0.85 (more lenient)
-    is_horizontal = (vertical_ratio is None or vertical_ratio < 0.85)
+    # Classify orientation: Torso angle with horizontal plane must be horizontal (ratio < 0.65)
+    is_horizontal = (vertical_ratio is None or vertical_ratio < 0.65)
 
     with thread_lock:
+        if elbow_angle is not None:
+            current_elbow_angle = float(elbow_angle)
+        if back_angle is not None:
+            current_back_angle = float(back_angle)
+
         if current_time - feedback_timer > 2.5:
             feedback_message = ""
 
         if is_horizontal:
             if elbow_angle is not None:
-                # 1. Going down: Transition from UP to DOWN (more lenient: < 115)
-                if stage == "up" and elbow_angle < 115:
+                # 1. Detect start of rep (elbow bends below 120 degrees)
+                if not in_rep and elbow_angle < 120:
+                    in_rep = True
+                    rep_min_elbow_angle = elbow_angle
+                    rep_is_form_valid = True
+                    rep_feedback = "GOOD"
                     stage = "down"
-                    is_rep_valid = True
 
-                if stage == "down":
-                    # Posture angle checks (more lenient: < 135)
-                    if back_angle is not None and back_angle < 135:
-                        is_rep_valid = False
-                    if plank_angle is not None and plank_angle < 135:
-                        is_rep_valid = False
+                if in_rep:
+                    # Track minimum elbow angle reached (depth)
+                    rep_min_elbow_angle = min(rep_min_elbow_angle, elbow_angle)
 
-                    # 3. Pushing up: Complete the cycle (more lenient: > 140)
-                    if elbow_angle > 140:
-                        stage = "up"
-                        if current_time - last_rep_time > 1.2:
-                            counter += 1  # ALWAYS count the completed rep!
-                            if is_rep_valid:
-                                feedback_message = "GOOD REP!"
-                                feedback_color_hex = "#7FFF00"
+                    # Monitor posture/core alignment during the ENTIRE rep
+                    if back_angle is not None and back_angle < 145:
+                        rep_is_form_valid = False
+                        rep_feedback = "KEEP CORE STRAIGHT / DON'T SAG HIPS"
+                    if plank_angle is not None and plank_angle < 145:
+                        rep_is_form_valid = False
+                        rep_feedback = "KEEP CORE STRAIGHT"
+
+                    # 2. Detect end of rep (elbow extends back above 150 degrees)
+                    if elbow_angle > 150:
+                        if current_time - last_rep_time > 1.0:  # Debounce filter
+                            is_deep_enough = (rep_min_elbow_angle < 100)
+                            
+                            if not is_deep_enough:
+                                bad_reps += 1
+                                feedback_message = "GO DEEPER!"
+                                feedback_color_hex = "#f59e0b"  # Warning Orange
+                            elif not rep_is_form_valid:
+                                bad_reps += 1
+                                feedback_message = rep_feedback
+                                feedback_color_hex = "#FF3232"  # Crimson Red
                             else:
-                                feedback_message = "REP COUNTED! KEEP CORE TIGHT."
-                                feedback_color_hex = "#f59e0b"
+                                good_reps += 1
+                                feedback_message = "GOOD REP!"
+                                feedback_color_hex = "#7FFF00"  # Neon Green
+                            
+                            total_reps = good_reps + bad_reps
                             last_rep_time = current_time
                             feedback_timer = current_time
+                        
+                        in_rep = False
+                        stage = "up"
         else:
-            # Standing check: only reset if elbows are straight AND we are clearly standing (vertical_ratio > 0.88)
-            if vertical_ratio is not None and vertical_ratio > 0.88:
-                if elbow_angle is None or elbow_angle > 130:
-                    stage = "up"
-                    is_rep_valid = False
+            # If user stands up clearly, reset state
+            if vertical_ratio is not None and vertical_ratio > 0.85:
+                in_rep = False
+                stage = "up"
+                feedback_message = "PLEASE LIE DOWN TO PLANK"
+                feedback_color_hex = "#FFFF00"
+                feedback_timer = current_time
 
         disp_feedback = feedback_message
         if not disp_feedback:
-            if vertical_ratio is not None and vertical_ratio >= 0.85:
+            if vertical_ratio is not None and vertical_ratio >= 0.65:
                 disp_feedback = "PLEASE LIE DOWN TO PLANK"
                 feedback_color_hex = "#FFFF00"
             elif back_angle is not None or plank_angle is not None:
-                bad_back = (back_angle is not None and back_angle < 135)
-                bad_plank = (plank_angle is not None and plank_angle < 135)
+                bad_back = (back_angle is not None and back_angle < 145)
+                bad_plank = (plank_angle is not None and plank_angle < 145)
                 if bad_back or bad_plank:
                     disp_feedback = "KEEP CORE ALIGNED!"
                     feedback_color_hex = "#FF3232"
@@ -689,10 +793,14 @@ def process_landmarks():
 
         return jsonify({
             "active": session_active,
-            "reps": counter,
+            "reps": total_reps,
+            "good_reps": good_reps,
+            "bad_reps": bad_reps,
             "stage": stage,
             "feedback": disp_feedback,
-            "color": feedback_color_hex
+            "color": feedback_color_hex,
+            "elbow_angle": current_elbow_angle,
+            "back_angle": current_back_angle
         }), 200
 
 def gen():

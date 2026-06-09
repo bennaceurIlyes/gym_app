@@ -35,23 +35,31 @@ pose = mp_pose.Pose(
     min_tracking_confidence=0.5
 )
 
-# Counter & Stage tracking variables
-counter = 0
-stage = "up"  # Starts at the UP position
+# State tracking variables
+good_reps = 0
+bad_reps = 0
+total_reps = 0
+stage = "up"  # "up" or "down"
 last_rep_time = 0
-is_rep_valid = True
+
+# Rep-specific tracking
+in_rep = False
+rep_min_elbow_angle = 180.0
+rep_is_form_valid = True
+rep_feedback = "GOOD"
 
 # Feedback notification variables
 feedback_message = "START PUSH-UPS"
 feedback_color = (0, 255, 255) # Yellow
 feedback_timer = time.time()
 
-# Premium Color Palette
-GREEN = (127, 255, 0)
-RED = (50, 50, 255)
-BLUE = (255, 127, 0)
-WHITE = (255, 255, 255)
-YELLOW = (0, 255, 255)
+# Premium Color Palette (BGR format for OpenCV)
+GREEN = (127, 255, 0)   # Neon Green
+RED = (50, 50, 255)     # Crimson Red
+ORANGE = (0, 165, 255)  # Warning Orange
+BLUE = (255, 127, 0)    # Royal Blue
+WHITE = (255, 255, 255) # White
+YELLOW = (0, 255, 255)  # Yellow
 
 while True:
     success, frame = cam.read()
@@ -195,48 +203,70 @@ while True:
             if vertical_ratios:
                 vertical_ratio = np.mean(vertical_ratios)
 
-        # Classify orientation: Torso angle with horizontal plane must be < 33 deg (ratio < 0.55)
-        is_horizontal = (vertical_ratio is not None and vertical_ratio < 0.55)
+        # Classify orientation: Torso angle with horizontal plane must be horizontal (ratio < 0.65)
+        is_horizontal = (vertical_ratio is None or vertical_ratio < 0.65)
 
-        # PUSH-UP STATE MACHINE (UP -> DOWN -> UP CYCLE)
+        # PUSH-UP BIOMECHANICAL STATE MACHINE
         if is_horizontal:
             if elbow_angle is not None:
-                # 1. Going down: Transition from UP to DOWN when elbows bend (< 100 degrees)
-                if stage == "up" and elbow_angle < 100:
+                # 1. Detect start of rep (elbow bends below 120 degrees)
+                if not in_rep and elbow_angle < 120:
+                    in_rep = True
+                    rep_min_elbow_angle = elbow_angle
+                    rep_is_form_valid = True
+                    rep_feedback = "GOOD"
                     stage = "down"
-                    is_rep_valid = True  # Reset validation for the new rep
 
-                # 2. Monitoring phase: Check if posture is maintained during the DOWN phase
-                if stage == "down":
-                    # If core sagged/piked (back_angle < 150) or body line misaligned (plank_angle < 150)
-                    if back_angle is not None and back_angle < 150:
-                        is_rep_valid = False
-                    if plank_angle is not None and plank_angle < 150:
-                        is_rep_valid = False
+                if in_rep:
+                    # Track minimum elbow angle reached (depth)
+                    rep_min_elbow_angle = min(rep_min_elbow_angle, elbow_angle)
 
-                    # 3. Pushing up: Complete the cycle back to UP when elbows extend (> 150 degrees)
+                    # Monitor posture/core alignment during the ENTIRE rep
+                    if back_angle is not None and back_angle < 145:
+                        rep_is_form_valid = False
+                        rep_feedback = "KEEP CORE STRAIGHT / DON'T SAG HIPS"
+                    if plank_angle is not None and plank_angle < 145:
+                        rep_is_form_valid = False
+                        rep_feedback = "KEEP CORE STRAIGHT"
+
+                    # 2. Detect end of rep (elbow extends back above 150 degrees)
                     if elbow_angle > 150:
-                        stage = "up"
-                        if current_time - last_rep_time > 1.5:  # Debounce filter
-                            if is_rep_valid:
-                                counter += 1
+                        if current_time - last_rep_time > 1.0:  # Debounce filter
+                            is_deep_enough = (rep_min_elbow_angle < 100)
+                            
+                            if not is_deep_enough:
+                                bad_reps += 1
+                                feedback_message = "GO DEEPER!"
+                                feedback_color = ORANGE
+                            elif not rep_is_form_valid:
+                                bad_reps += 1
+                                feedback_message = rep_feedback
+                                feedback_color = RED
+                            else:
+                                good_reps += 1
                                 feedback_message = "GOOD REP!"
                                 feedback_color = GREEN
-                            else:
-                                feedback_message = "REP DISCARDED: KEEP CORE TIGHT!"
-                                feedback_color = RED
+                            
+                            total_reps = good_reps + bad_reps
                             last_rep_time = current_time
                             feedback_timer = current_time
+                        
+                        in_rep = False
+                        stage = "up"
         else:
-            # Reset stage when standing to prevent storing intermediate phases
-            stage = "up"
-            is_rep_valid = False
+            # If user stands up clearly, reset state
+            if vertical_ratio is not None and vertical_ratio > 0.85:
+                in_rep = False
+                stage = "up"
+                feedback_message = "PLEASE LIE DOWN TO PLANK"
+                feedback_color = YELLOW
+                feedback_timer = current_time
 
         # DRAW BODY CORRESPONDENCES WITH COLOR-CODED CORRECTNESS
         # Draw full core alignment lines (Green if straight and lying down, Red if sagging/piked or standing)
         if l_shoulder_lm.visibility > 0.5 and l_hip_lm.visibility > 0.5:
-            l_back_ok = (l_back_angle is None or l_back_angle > 150)
-            l_plank_ok = (l_plank_angle is None or l_plank_angle > 150)
+            l_back_ok = (l_back_angle is None or l_back_angle > 145)
+            l_plank_ok = (l_plank_angle is None or l_plank_angle > 145)
             l_form_ok = l_back_ok and l_plank_ok
             back_color = GREEN if (l_form_ok and is_horizontal) else RED
             
@@ -252,8 +282,8 @@ while True:
                     cv2.circle(frame, l_ankle, 8, WHITE, -1)
 
         if r_shoulder_lm.visibility > 0.5 and r_hip_lm.visibility > 0.5:
-            r_back_ok = (r_back_angle is None or r_back_angle > 150)
-            r_plank_ok = (r_plank_angle is None or r_plank_angle > 150)
+            r_back_ok = (r_back_angle is None or r_back_angle > 145)
+            r_plank_ok = (r_plank_angle is None or r_plank_angle > 145)
             r_form_ok = r_back_ok and r_plank_ok
             back_color = GREEN if (r_form_ok and is_horizontal) else RED
             
@@ -290,25 +320,28 @@ while True:
     cv2.rectangle(overlay, (0, 0), (w, 80), (30, 30, 30), -1)
     cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
 
+    # Calculate Accuracy
+    accuracy = 100 if total_reps == 0 else int((good_reps / total_reps) * 100)
+
     # Render details inside the HUD
-    cv2.putText(frame, f"REPS: {counter}", (30, 50), cv2.FONT_HERSHEY_DUPLEX, 1.1, GREEN, 2)
-    cv2.putText(frame, f"STAGE: {stage.upper()}", (210, 50), cv2.FONT_HERSHEY_DUPLEX, 0.9, WHITE, 2)
+    cv2.putText(frame, f"GOOD: {good_reps}  BAD: {bad_reps}  ACC: {accuracy}%", (20, 30), cv2.FONT_HERSHEY_DUPLEX, 0.7, GREEN, 2)
+    cv2.putText(frame, f"STAGE: {stage.upper()}", (20, 65), cv2.FONT_HERSHEY_DUPLEX, 0.7, WHITE, 2)
 
     if feedback_message:
-        cv2.putText(frame, feedback_message, (390, 50), cv2.FONT_HERSHEY_DUPLEX, 0.8, feedback_color, 2)
+        cv2.putText(frame, feedback_message, (350, 50), cv2.FONT_HERSHEY_DUPLEX, 0.8, feedback_color, 2)
     else:
-        if vertical_ratio is not None and vertical_ratio >= 0.55:
-            cv2.putText(frame, "PLEASE LIE DOWN TO PLANK", (390, 50), cv2.FONT_HERSHEY_DUPLEX, 0.8, YELLOW, 2)
+        if vertical_ratio is not None and vertical_ratio >= 0.65:
+            cv2.putText(frame, "PLEASE LIE DOWN TO PLANK", (350, 50), cv2.FONT_HERSHEY_DUPLEX, 0.8, YELLOW, 2)
         elif back_angle is not None or plank_angle is not None:
             # Bad posture checks on whichever parts are visible
-            bad_back = (back_angle is not None and back_angle < 150)
-            bad_plank = (plank_angle is not None and plank_angle < 150)
+            bad_back = (back_angle is not None and back_angle < 145)
+            bad_plank = (plank_angle is not None and plank_angle < 145)
             if bad_back or bad_plank:
-                cv2.putText(frame, "KEEP CORE ALIGNED!", (390, 50), cv2.FONT_HERSHEY_DUPLEX, 0.8, RED, 2)
+                cv2.putText(frame, "KEEP CORE ALIGNED!", (350, 50), cv2.FONT_HERSHEY_DUPLEX, 0.8, RED, 2)
             else:
-                cv2.putText(frame, "FORM: GOOD", (390, 50), cv2.FONT_HERSHEY_DUPLEX, 0.8, GREEN, 2)
+                cv2.putText(frame, "FORM: GOOD", (350, 50), cv2.FONT_HERSHEY_DUPLEX, 0.8, GREEN, 2)
         else:
-            cv2.putText(frame, "FORM: DETECTING...", (390, 50), cv2.FONT_HERSHEY_DUPLEX, 0.8, YELLOW, 2)
+            cv2.putText(frame, "FORM: DETECTING...", (350, 50), cv2.FONT_HERSHEY_DUPLEX, 0.8, YELLOW, 2)
 
     cv2.imshow("Push-up Counter", frame)
 
@@ -316,4 +349,5 @@ while True:
         break
 
 cam.release()
-cv2.destroyAllWindows()
+pose.close()
+cv2.destroyAllWindows()

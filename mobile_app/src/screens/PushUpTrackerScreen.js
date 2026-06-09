@@ -25,13 +25,18 @@ export default function PushUpTrackerScreen({ onBack }) {
   const [connectionStatus, setConnectionStatus] = useState('disconnected'); // 'disconnected' | 'connecting' | 'connected'
   const [workoutActive, setWorkoutActive] = useState(false);
   const [reps, setReps] = useState(0);
+  const [goodReps, setGoodReps] = useState(0);
+  const [badReps, setBadReps] = useState(0);
+  const [accuracy, setAccuracy] = useState(100);
+  const [elbowAngle, setElbowAngle] = useState(null);
+  const [backAngle, setBackAngle] = useState(null);
   const [stage, setStage] = useState('up');
   const [feedback, setFeedback] = useState('READY');
   const [feedbackColor, setFeedbackColor] = useState('#FFFF00');
 
   // Workout Summary Modal State
   const [showSummary, setShowSummary] = useState(false);
-  const [summaryData, setSummaryData] = useState({ reps: 0, time: 0 });
+  const [summaryData, setSummaryData] = useState({ reps: 0, goodReps: 0, badReps: 0, time: 0 });
 
   const timerRef = useRef(null);
   const workoutDurationRef = useRef(0);
@@ -141,6 +146,11 @@ export default function PushUpTrackerScreen({ onBack }) {
       if (data.status === 'started' || data.status === 'already_running') {
         setWorkoutActive(true);
         setReps(0);
+        setGoodReps(0);
+        setBadReps(0);
+        setAccuracy(100);
+        setElbowAngle(null);
+        setBackAngle(null);
         setStage('up');
         setFeedback('START PUSH-UPS');
         setFeedbackColor('#FFFF00');
@@ -166,7 +176,9 @@ export default function PushUpTrackerScreen({ onBack }) {
       if (data.status === 'stopped' || data.status === 'not_running') {
         setWorkoutActive(false);
         setSummaryData({
-          reps: data.reps || reps,
+          reps: data.reps !== undefined ? data.reps : reps,
+          goodReps: data.good_reps !== undefined ? data.good_reps : goodReps,
+          badReps: data.bad_reps !== undefined ? data.bad_reps : badReps,
           time: workoutDurationRef.current
         });
         setShowSummary(true);
@@ -175,6 +187,8 @@ export default function PushUpTrackerScreen({ onBack }) {
       setWorkoutActive(false);
       setSummaryData({
         reps: reps,
+        goodReps: goodReps,
+        badReps: badReps,
         time: workoutDurationRef.current
       });
       setShowSummary(true);
@@ -283,9 +297,23 @@ export default function PushUpTrackerScreen({ onBack }) {
                     const data = JSON.parse(event.nativeEvent.data);
                     if (data.reps !== undefined) {
                       setReps(data.reps);
+                      setGoodReps(data.good_reps || 0);
+                      setBadReps(data.bad_reps || 0);
+                      
+                      const total = (data.good_reps || 0) + (data.bad_reps || 0);
+                      const acc = total === 0 ? 100 : Math.round(((data.good_reps || 0) / total) * 100);
+                      setAccuracy(acc);
+                      
                       setStage(data.stage);
                       setFeedback(data.feedback);
                       setFeedbackColor(data.color);
+                      
+                      if (data.elbow_angle !== undefined) {
+                        setElbowAngle(data.elbow_angle !== null ? Math.round(data.elbow_angle) : null);
+                      }
+                      if (data.back_angle !== undefined) {
+                        setBackAngle(data.back_angle !== null ? Math.round(data.back_angle) : null);
+                      }
                     }
                   } catch (e) {
                     console.log("Error processing webview message:", e);
@@ -320,17 +348,54 @@ export default function PushUpTrackerScreen({ onBack }) {
             )}
           </View>
 
+          {/* Diagnostics Metrics Row */}
+          {workoutActive && (
+            <View style={styles.metricsRow}>
+              <View style={styles.metricCell}>
+                <Feather name="activity" size={14} color="#38bdf8" style={{ marginRight: 6 }} />
+                <Text style={styles.metricLabel}>ELBOW: </Text>
+                <Text style={styles.metricValue}>{elbowAngle !== null ? `${elbowAngle}°` : '---'}</Text>
+              </View>
+              <View style={styles.metricCell}>
+                <Feather name="sliders" size={14} color="#10b981" style={{ marginRight: 6 }} />
+                <Text style={styles.metricLabel}>SPINE: </Text>
+                <Text style={styles.metricValue}>{backAngle !== null ? `${backAngle}°` : '---'}</Text>
+              </View>
+            </View>
+          )}
+
           {/* Realtime Stats HUD */}
           <View style={styles.hudPanel}>
-            {/* Rep Count Card */}
+            {/* Good Reps Card */}
             <View style={styles.hudStatCard}>
-              <Text style={styles.hudLabel}>REPS</Text>
-              <Text style={styles.hudValueReps}>{reps}</Text>
+              <Text style={styles.hudLabel}>GOOD</Text>
+              <Text style={[styles.hudValueReps, { color: '#10b981' }]}>{goodReps}</Text>
+            </View>
+
+            {/* Total Reps Card */}
+            <View style={styles.hudStatCard}>
+              <Text style={styles.hudLabel}>TOTAL</Text>
+              <Text style={[styles.hudValueReps, { color: '#ffffff' }]}>{reps}</Text>
+            </View>
+
+            {/* Bad Reps Card */}
+            <View style={styles.hudStatCard}>
+              <Text style={styles.hudLabel}>BAD</Text>
+              <Text style={[styles.hudValueReps, { color: '#ef4444' }]}>{badReps}</Text>
+            </View>
+          </View>
+
+          {/* Secondary Stats Row */}
+          <View style={styles.hudPanel}>
+            {/* Accuracy Card */}
+            <View style={styles.hudStatCardSecondary}>
+              <Text style={styles.hudLabelSecondary}>ACCURACY</Text>
+              <Text style={[styles.hudValueSecondary, { color: '#38bdf8' }]}>{accuracy}%</Text>
             </View>
 
             {/* Stage Card */}
-            <View style={styles.hudStatCard}>
-              <Text style={styles.hudLabel}>STAGE</Text>
+            <View style={styles.hudStatCardSecondary}>
+              <Text style={styles.hudLabelSecondary}>STAGE</Text>
               <View style={[
                 styles.hudBadge,
                 { backgroundColor: stage === 'down' ? '#3b82f6' : '#10b981' }
@@ -352,7 +417,7 @@ export default function PushUpTrackerScreen({ onBack }) {
               ]}
             >
               <Feather 
-                name={feedback.includes('KEEP') || feedback.includes('ERROR') ? "alert-circle" : "check-circle"} 
+                name={feedback.includes('KEEP') || feedback.includes('ERROR') || feedback.includes('PLEASE') ? "alert-circle" : "check-circle"} 
                 size={20} 
                 color={feedbackColor || '#3b82f6'} 
                 style={{ marginRight: 8 }}
@@ -427,6 +492,17 @@ export default function PushUpTrackerScreen({ onBack }) {
 
                 <View style={styles.summaryStatsGrid}>
                   <View style={styles.summaryStatBox}>
+                    <Text style={styles.summaryStatLabel}>Good Reps</Text>
+                    <Text style={[styles.summaryStatValue, { color: '#10b981' }]}>{summaryData.goodReps || 0}</Text>
+                  </View>
+                  <View style={styles.summaryStatBox}>
+                    <Text style={styles.summaryStatLabel}>Bad Reps</Text>
+                    <Text style={[styles.summaryStatValue, { color: '#ef4444' }]}>{summaryData.badReps || 0}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.summaryStatsGrid}>
+                  <View style={styles.summaryStatBox}>
                     <Text style={styles.summaryStatLabel}>Total Reps</Text>
                     <Text style={styles.summaryStatValue}>{summaryData.reps}</Text>
                   </View>
@@ -434,6 +510,13 @@ export default function PushUpTrackerScreen({ onBack }) {
                     <Text style={styles.summaryStatLabel}>Duration</Text>
                     <Text style={styles.summaryStatValue}>{formatTime(summaryData.time)}</Text>
                   </View>
+                </View>
+
+                <View style={[styles.summaryStatBox, { width: '100%', marginBottom: 25 }]}>
+                  <Text style={styles.summaryStatLabel}>Accuracy Score</Text>
+                  <Text style={[styles.summaryStatValue, { color: '#38bdf8' }]}>
+                    {summaryData.reps === 0 ? 100 : Math.round(((summaryData.goodReps || 0) / summaryData.reps) * 100)}%
+                  </Text>
                 </View>
 
                 <TouchableOpacity
@@ -712,6 +795,58 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 18,
     fontWeight: '800',
+  },
+  metricsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 15,
+    width: '100%',
+    gap: 10,
+  },
+  metricCell: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  metricLabel: {
+    color: '#94a3b8',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  metricValue: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  hudStatCardSecondary: {
+    flex: 1,
+    backgroundColor: '#1e293b',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#334155',
+    padding: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 70,
+  },
+  hudLabelSecondary: {
+    fontSize: 10,
+    fontWeight: '750',
+    color: '#94a3b8',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  hudValueSecondary: {
+    fontSize: 22,
+    fontWeight: '900',
   },
 
   // SUMMARY MODAL STYLE SHEET
